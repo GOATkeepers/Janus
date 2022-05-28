@@ -9,25 +9,16 @@ interface IYieldCurve {
     function getYield(uint256 _totalStaked) external view returns (uint256);
 }
 
-// 1 getFaction
-// 2 create character from this contract
-// 3 block based rake
+interface ISteward {
+    function mint(address to) external;
+}
+
+// 1 getFaction finish
 
 interface IFunbugProxy {
-    function _mint(address _to, uint256 _amount) external payable;
-    function _burn(uint256 _amount) external payable;
     function _transfer(address _to, uint256 _amount) external payable;
     function _approve(address _spender, uint256 _amount) external payable;
     function _transferFrom(address _from, address _to, uint256 _amount) external payable;
-    function _allowance(address _owner, address _spender) external view returns (uint256);
-    function _balanceOf(address _owner) external view returns (uint256);
-    function _totalSupply() external view returns (uint256);
-    function _name() external view returns (string memory);
-    function _symbol() external view returns (string memory);
-    function _decimals() external view returns (uint8);
-    function _pause() external payable;
-    function _unpause() external payable;
-    function _beforeTokenTransfer(address _from, address _to, uint256 _amount) external;
 }
 
 /// @custom:security-contact bc@goatkeepers.sh
@@ -35,7 +26,8 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
 
     string[] public factionSeed = ["GOAT", "Imperial", "Sacred", "Architect", 
         "Conqueror", "Ascetic", "Sun and Moon", "Unmentionable"];
-    uint256 seedPrice;
+    uint256 public seedPrice;
+    uint256 public playerCharacterPrice;
     address public FunbugProxyAddress;
     address public StewardAddress;
     address public YieldCurveAddress;
@@ -60,14 +52,27 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
     mapping (uint256 => address[]) public Stakers;
     // @dev Staker address => unclaimed yield
     mapping (address => uint256) public YieldAvailable;
+    // @dev Urbit Holders get a faction based on their star
+    mapping (address => mapping(bool => uint8)) public urbitFaction;
 
     Tile[] public tiles;
     Faction[] public factions;
 
-    constructor(uint256 _seedPrice) {
+    constructor(uint256 _seedPrice, uint256 _playerCharacterPrice) {
         seedPrice = _seedPrice;
+        playerCharacterPrice = _playerCharacterPrice;
         for (uint8 i = 0; i < factionSeed.length; i++) {
             factions.push(Faction(factionSeed[i], i));
+        }
+    }
+
+    function createPlayerCharacter(uint256 urbitId) public payable {
+        require(msg.value >= playerCharacterPrice, 'HFSP');
+        if (urbitId != 0) {
+            bytes32 PCFactionSeed = bytes32(urbitId);
+            bytes1 urbitSlice = bytes1(PCFactionSeed[2]);
+            uint8 urbitFactionId = uint8(urbitSlice);
+            urbitFaction[msg.sender][true];
         }
     }
 
@@ -81,7 +86,7 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
     // this is currently continuous, need to make it periodic
     function claimYield(uint256 _tileId) public returns (bool) {
         require(tileExists(_tileId));
-        
+
         uint256 playerProportion = Staked[_tileId][msg.sender] / tiles[_tileId].totalStaked;
         uint256 totalYield = IYieldCurve(YieldCurveAddress).getYield(tiles[_tileId].totalStaked);
         uint256 yield = totalYield * playerProportion;
@@ -92,16 +97,36 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
         
         // rake all yield (this is super inefficient but I'm in a rush)
         for (uint256 i = 0; i < Stakers[_tileId].length; i++) {
-            uint256 stakerProportion = Staked[_tileId][Stakers[_tileId][i]] / tiles[_tileId].totalStaked;
-            uint256 stakerYield = yield * stakerProportion;
-            YieldAvailable[Stakers[_tileId][i]] += stakerYield;
+            // calculate yield HOURLY! BAGS HERE MOFOS
+            if (block.number >= (tiles[_tileId].rakeBlockNumber + 900 )) {
+                uint256 stakerProportion = Staked[_tileId][Stakers[_tileId][i]] / tiles[_tileId].totalStaked;
+                uint256 stakerYield = yield * stakerProportion;
+                YieldAvailable[Stakers[_tileId][i]] += stakerYield;
+                return true;
+            }
+            else {
+                return true;
+            }
         }
 
         return true;
     }
 
     function getPlayerFaction() public view returns (uint8) {
-        return 0;
+        if (urbitFaction[msg.sender][true] != 0) {
+            return urbitFaction[msg.sender][true];
+        }
+        else {
+            return 0;
+        }
+    }
+
+    function setPlayerCharacterPrice(uint256 _price) public {
+        playerCharacterPrice = _price;
+    }
+
+    function setSeedPrice(uint256 _price) public {
+        seedPrice = _price;
     }
 
     function approveFunbug(address _spender, uint256 _amount) public returns (bool) {

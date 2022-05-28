@@ -13,9 +13,14 @@ contract Steward is ERC721, ERC721Enumerable, Pausable, Ownable, ERC721Burnable 
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIdCounter;
-    uint256 basePrice = 10000000000000000;
+
+    mapping (address => bool) private permitted;
 
     constructor() ERC721("Steward", "STEW") {}
+
+    function setPermitted(address permit) public onlyOwner {
+        permitted[permit] = true;
+    }
 
     function _baseURI() internal pure override returns (string memory) {
         return "https://api.goatkeepers.sh/v1/steward/metadata";
@@ -29,8 +34,13 @@ contract Steward is ERC721, ERC721Enumerable, Pausable, Ownable, ERC721Burnable 
         _unpause();
     }
 
-    function safeMint(address to) public payable onlyOwner {
-        require(msg.value > basePrice);
+    function mint(address _to) public {
+        bool list = permitted[_to];
+        require((list = true), 'no stairway, denied');
+        safeMint(_to);
+    }
+
+    function safeMint(address to) private {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
         _safeMint(to, tokenId);
