@@ -1,0 +1,18 @@
+{
+  "name": "janus",
+  "version": "0.0.1",
+  "description": "geolocation game",
+  "main": "index.js",
+  "repository": "github.com/goatkeepers/stewardsofjanus",
+  "author": "bradleyc",
+  "license": "MITNFA",
+  "private": false,
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.6.0",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "geolib": "^3.3.3",
+    "pg": "^8.7.3",
+    "pg-format": "^1.0.4"
+  }
+}
