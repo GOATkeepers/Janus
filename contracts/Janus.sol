@@ -7,9 +7,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IYieldCurve {
     function getYield(uint256 _totalStaked) external view returns (uint256);
-    function setSlope(uint256 _slope) external view returns (bool);
-    function setIntercept(uint256 _intercept) external view returns (bool);
 }
+
+// 1 getFaction
+// 2 create character from this contract
+// 3 block based rake
 
 interface IFunbugProxy {
     function _mint(address _to, uint256 _amount) external payable;
@@ -31,7 +33,12 @@ interface IFunbugProxy {
 /// @custom:security-contact bc@goatkeepers.sh
 contract Janus is Ownable, YieldCurve, FunbugProxy {
 
+    string[] public factionSeed = ["GOAT", "Imperial", "Sacred", "Architect", 
+        "Conqueror", "Ascetic", "Sun and Moon", "Unmentionable"];
     uint256 seedPrice;
+    address public FunbugProxyAddress;
+    address public StewardAddress;
+    address public YieldCurveAddress;
 
     struct Faction {
         string name;
@@ -57,31 +64,30 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
     Tile[] public tiles;
     Faction[] public factions;
 
-    constructor(uint256 _seedPrice) public {
+    constructor(uint256 _seedPrice) {
         seedPrice = _seedPrice;
-        factions.push(Faction("GOAT", 0), Faction("Imperial", 1), Faction("Sacred", 2), 
-            Faction("Architect", 3), Faction("Conqueror", 4), Faction("Ascetic", 5), 
-            Faction("Sun and Moon", 6), Faction("Unmentionable", 7));
+        for (uint8 i = 0; i < factionSeed.length; i++) {
+            factions.push(Faction(factionSeed[i], i));
+        }
     }
 
-    function seedTile(string calldata _name, uint8 _id) public payable returns(bool) {
+    function seedTile(string calldata _name, uint8 _id, address _FunbugProxyAddress, address _StewardAddress) public payable returns(bool) {
         require(msg.value >= seedPrice);
         require(!tileExists(_id));
-        require(!tileExists(_name));
-        tiles[_id] = Tile(_name, 0, _id);
+        tiles[_id] = Tile(_name, 0, block.number, _id);
         return true;
     }
 
     // this is currently continuous, need to make it periodic
     function claimYield(uint256 _tileId) public returns (bool) {
         require(tileExists(_tileId));
-
+        
         uint256 playerProportion = Staked[_tileId][msg.sender] / tiles[_tileId].totalStaked;
-        uint256 totalYield = IYieldCurve.getYield(tiles[_tileId].totalStaked);
+        uint256 totalYield = IYieldCurve(YieldCurveAddress).getYield(tiles[_tileId].totalStaked);
         uint256 yield = totalYield * playerProportion;
         uint256 balance = YieldAvailable[msg.sender];
         uint256 totalSend = balance + yield;
-        IFunbugProxy(this)._transfer(msg.sender, totalSend);
+        IFunbugProxy(FunbugProxyAddress)._transfer(msg.sender, totalSend);
         YieldAvailable[msg.sender] = 0;
         
         // rake all yield (this is super inefficient but I'm in a rush)
@@ -99,7 +105,7 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
     }
 
     function approveFunbug(address _spender, uint256 _amount) public returns (bool) {
-        IFunbugProxy(this)._approve(_spender, _amount);
+        IFunbugProxy(FunbugProxyAddress)._approve(_spender, _amount);
         return true;
     }
 
@@ -108,7 +114,9 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
         Staked[_tileId][msg.sender] = _stakeAmount;
         StakedByFaction[_tileId][getPlayerFaction()] += _stakeAmount;
         Stakers[_tileId].push(msg.sender);
-        require(IFunbugProxy(this)._transferFrom(msg.sender, this, _stakeAmount), "Transfer Failed");
+        IFunbugProxy(FunbugProxyAddress)._transferFrom(msg.sender, address(this), _stakeAmount);
+        bool stakeSuccess = true;
+        require(stakeSuccess == true, "Transfer Failed");
         return true;
     }
 
@@ -118,12 +126,15 @@ contract Janus is Ownable, YieldCurve, FunbugProxy {
         uint256 unstakeAmount = Staked[_tileId][msg.sender];
         Staked[_tileId][msg.sender] = 0;
         StakedByFaction[_tileId][getPlayerFaction()] -= unstakeAmount;
-        Stakers[_tileId].remove(msg.sender);
-        require(IFunbugProxy(this)._transfer(this, unstakeAmount), "Unstake Failed");
+        IFunbugProxy(FunbugProxyAddress)._transfer(address(this), unstakeAmount);
+        bool unstakeSuccess = true;
+        require(unstakeSuccess == true, "Unstake Failed");
         return true;
     }
 
+    // expensive but dammit strict typing
     function tileExists(uint256 _tileId) public view returns (bool) {
-        return tiles[_tileId].name != "";
+        bytes32 name = keccak256(abi.encodePacked((tiles[_tileId].name)));
+        return name != "";
     }
 }
