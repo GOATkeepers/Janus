@@ -89,24 +89,22 @@ function createNewRowTile() {
 function walkMap() {
     let x = 0; // First tile creates 0,0
     let y = 0;
-    while (tiles.length < 358) {           
-        while (y < 20) {
-            while (x < 20) {
-                createEastTile();
-                x += 1;
-            }
-            x = 0; // reset x
-            createNewRowTile();
-            y += 1;
+    while (y < 19) {
+        while (x < 20) {
+            createEastTile();
+            x += 1;
         }
+        x = 0; // reset x
+        createNewRowTile();
+        y += 1;
     }
 }
     
 function checkLengthOfSides() {
     const nw = tiles[0][0];
-    const ne = tiles[20][1];
-    const sw = tiles[380][2];
-    const se = tiles[400][3];
+    const ne = tiles[19][1];
+    const sw = tiles[379][2];
+    const se = tiles[399][3];
     const lengthNorth = gl.getDistance(nw, ne);
     const lengthEast = gl.getDistance(ne, se);
     const lengthSouth = gl.getDistance(se, sw);
